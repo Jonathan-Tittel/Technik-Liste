@@ -1,8 +1,31 @@
+// ── Klassen-Verwaltung ────────────────────────────────────────
+const DEFAULT_CLASS = "10B";
+
+function loadClasses() {
+  const saved = localStorage.getItem("technik_classes");
+  return saved ? JSON.parse(saved) : [DEFAULT_CLASS];
+}
+
+function saveClasses(list) {
+  localStorage.setItem("technik_classes", JSON.stringify(list));
+}
+
+function loadActiveClass() {
+  return localStorage.getItem("technik_active_class") || DEFAULT_CLASS;
+}
+
+function saveActiveClass(name) {
+  localStorage.setItem("technik_active_class", name);
+}
+
+function classKey(base, className) {
+  return `${base}__${className}`;
+}
+
 // ── Schüler ──────────────────────────────────────────────────
 const DEFAULT_STUDENTS = [
   "Alexakis Leonidas",
   "Brommer Lionel",
-  "Faller Matteo",
   "Hahn Felix",
   "Hügle Bennet",
   "Klein Yves",
@@ -10,16 +33,21 @@ const DEFAULT_STUDENTS = [
   "Schill Max",
   "Schwehr Joshua",
   "Seifert Theo",
-  "Tittel Jonathan"
+  "Tittel Jonathan",
+  "Faller Matteo"
 ];
 
 function loadStudents() {
-  const saved = localStorage.getItem("technik_students");
-  return saved ? JSON.parse(saved) : DEFAULT_STUDENTS;
+  const key = classKey("technik_students", loadActiveClass());
+  const saved = localStorage.getItem(key);
+  // Nur die Standard-Klasse bekommt die Default-Schülerliste
+  if (saved) return JSON.parse(saved);
+  if (loadActiveClass() === DEFAULT_CLASS) return DEFAULT_STUDENTS;
+  return [];
 }
 
 function saveStudents(list) {
-  localStorage.setItem("technik_students", JSON.stringify(list));
+  localStorage.setItem(classKey("technik_students", loadActiveClass()), JSON.stringify(list));
 }
 
 // ── Datums-Helfer ─────────────────────────────────────────────
@@ -61,7 +89,7 @@ function seededRandom(seed) {
 
 // ── Krank-Verwaltung ─────────────────────────────────────────
 function sickKey(thursday) {
-  return `sick_${thursday.getFullYear()}_KW${isoWeek(thursday)}`;
+  return classKey(`sick_${thursday.getFullYear()}_KW${isoWeek(thursday)}`, loadActiveClass());
 }
 
 function loadSick(thursday) {
@@ -75,7 +103,7 @@ function saveSick(thursday, list) {
 
 // ── Zu-spät-Verwaltung ───────────────────────────────────────
 function lateKey(thursday) {
-  return `late_${thursday.getFullYear()}_KW${isoWeek(thursday)}`;
+  return classKey(`late_${thursday.getFullYear()}_KW${isoWeek(thursday)}`, loadActiveClass());
 }
 
 function loadLate(thursday) {
@@ -101,9 +129,10 @@ function resolveStudent(query, students) {
   }) || null;
 }
 
-// ── Referenz-Donnerstag (KW 24 / 12.06.2026) ────────────────────
-const REF_THURSDAY = getThursdayOfWeek(new Date(2026, 5, 12));// Offset damit KW24 (weeks=0) bei Index 3 (Hahn Felix) startet
-const ROTATION_OFFSET = 3;
+// ── Referenz-Donnerstag (KW 25 / 19.06.2026) ─────────────────
+const REF_THURSDAY = getThursdayOfWeek(new Date(2026, 5, 18));
+// Offset: KW25 (weeks=0) startet bei Index 2 (Hahn Felix)
+const ROTATION_OFFSET = 4;
 // ── Zuteilung (kranke Schüler überspringen) ──────────────────
 function getAssigned(students, thursday) {
   const sick = loadSick(thursday);
@@ -372,4 +401,120 @@ document.getElementById("lateList").addEventListener("click", e => {
 });
 
 // ── Start ─────────────────────────────────────────────────────
+
+function deleteClass(name) {
+  let classes = loadClasses().filter(c => c !== name);
+  if (classes.length === 0) classes = [DEFAULT_CLASS];
+  saveClasses(classes);
+  if (loadActiveClass() === name) {
+    saveActiveClass(classes[0]);
+    currentThursday = getThursdayOfWeek(new Date());
+    updateClassSubtitle();
+    render();
+  }
+  renderClassModal();
+}
+
+function renameClass(oldName) {
+  const newName = prompt(`Klasse umbenennen:`, oldName);
+  if (!newName || !newName.trim() || newName.trim() === oldName) return;
+  const trimmed = newName.trim();
+  let classes = loadClasses();
+  if (classes.includes(trimmed)) return;
+  classes = classes.map(c => c === oldName ? trimmed : c);
+  saveClasses(classes);
+  // Daten umkopieren
+  ["technik_students"].forEach(base => {
+    const val = localStorage.getItem(classKey(base, oldName));
+    if (val !== null) {
+      localStorage.setItem(classKey(base, trimmed), val);
+      localStorage.removeItem(classKey(base, oldName));
+    }
+  });
+  if (loadActiveClass() === oldName) {
+    saveActiveClass(trimmed);
+    updateClassSubtitle();
+  }
+  renderClassModal();
+  render();
+}
+
+// ── Klassen-Modal ─────────────────────────────────────────────
+function renderClassModal() {
+  const classes = loadClasses();
+  const active = loadActiveClass();
+  const list = document.getElementById("classList");
+  list.innerHTML = "";
+  classes.forEach(name => {
+    const row = document.createElement("div");
+    row.className = "class-row" + (name === active ? " class-row--active" : "");
+    row.innerHTML = `
+      <span class="class-row-name">${name}</span>
+      <div class="class-row-actions">
+        ${name === active ? "<span class=\"class-active-badge\">Aktiv</span>" : ""}
+        <button class="class-action-btn" data-action="rename" data-name="${name}" title="Umbenennen">&#x270F;&#xFE0F;</button>
+        <button class="class-action-btn class-action-btn--delete" data-action="delete" data-name="${name}" title="L\u00f6schen">&times;</button>
+      </div>`;
+    row.querySelector(".class-row-name").addEventListener("click", () => {
+      saveActiveClass(name);
+      currentThursday = getThursdayOfWeek(new Date());
+      closeClassModal();
+      updateClassSubtitle();
+      render();
+    });
+    row.querySelector("[data-action='rename']").addEventListener("click", e => {
+      e.stopPropagation();
+      renameClass(name);
+    });
+    row.querySelector("[data-action='delete']").addEventListener("click", e => {
+      e.stopPropagation();
+      if (confirm(`Klasse "${name}" wirklich löschen?`)) deleteClass(name);
+    });
+    list.appendChild(row);
+  });
+}
+
+
+function openClassModal() {
+  renderClassModal();
+  document.getElementById("classModal").classList.remove("hidden");
+}
+
+function closeClassModal() {
+  document.getElementById("classModal").classList.add("hidden");
+  document.getElementById("classNameInput").value = "";
+}
+
+function updateClassSubtitle() {
+  document.getElementById("classSubtitle").textContent = loadActiveClass();
+}
+
+document.getElementById("classBtn").addEventListener("click", openClassModal);
+document.getElementById("classModalClose").addEventListener("click", closeClassModal);
+document.getElementById("classModal").addEventListener("click", e => {
+  if (e.target === document.getElementById("classModal")) closeClassModal();
+});
+
+document.getElementById("classAddBtn").addEventListener("click", () => {
+  const name = document.getElementById("classNameInput").value.trim();
+  if (!name) return;
+  const classes = loadClasses();
+  if (!classes.includes(name)) {
+    classes.push(name);
+    saveClasses(classes);
+    // Neue Klasse mit leerer Schülerliste initialisieren
+    localStorage.setItem(classKey("technik_students", name), JSON.stringify([]));
+  }
+  saveActiveClass(name);
+  currentThursday = getThursdayOfWeek(new Date());
+  closeClassModal();
+  updateClassSubtitle();
+  render();
+});
+
+document.getElementById("classNameInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("classAddBtn").click();
+});
+
+updateClassSubtitle();
 render();

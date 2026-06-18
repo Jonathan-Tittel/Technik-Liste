@@ -10,8 +10,9 @@
 
   <div class="container">
     <header>
+      <button id="classBtn" class="class-btn" aria-label="Klasse wechseln">&#x1F3EB;</button>
       <h1>Technik Dienstplan</h1>
-      <p class="subtitle">Donnerstag-Rotation</p>
+      <p class="subtitle" id="classSubtitle">Donnerstag-Rotation</p>
     </header>
 
     <nav class="week-nav">
@@ -76,6 +77,23 @@
     </section>
   </div>
 
+  <!-- Klassen-Modal -->
+  <div id="classModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Klassen</h2>
+        <button id="classModalClose" class="modal-close" aria-label="Schließen">&times;</button>
+      </div>
+      <div id="classList" class="class-list"></div>
+      <div class="modal-divider"></div>
+      <div class="modal-add-row">
+        <input id="classNameInput" type="text" placeholder="Neue Klasse benennen…" autocomplete="off" />
+        <button id="classAddBtn" class="btn-primary">Hinzufügen</button>
+      </div>
+    </div>
+  </div>
+
   <script src="Technik.js"></script>
+
 </body>
 </html>
