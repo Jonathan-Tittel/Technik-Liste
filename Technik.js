@@ -1,16 +1,16 @@
 // ── Schüler ──────────────────────────────────────────────────
 const DEFAULT_STUDENTS = [
-  "Hahn Felix",
-  "Hügle Bennet",
   "Alexakis Leonidas",
   "Brommer Lionel",
+  "Faller Matteo",
+  "Hahn Felix",
+  "Hügle Bennet",
   "Klein Yves",
+  "Priore Matteo",
   "Schill Max",
   "Schwehr Joshua",
   "Seifert Theo",
-  "Tittel Jonathan",
-  "Faller Matteo",
-  "Priore Matteo"
+  "Tittel Jonathan"
 ];
 
 function loadStudents() {
@@ -102,14 +102,14 @@ function resolveStudent(query, students) {
 }
 
 // ── Referenz-Donnerstag (KW 24 / 12.06.2026) ────────────────────
-const REF_THURSDAY = getThursdayOfWeek(new Date(2026, 5, 12));
-
+const REF_THURSDAY = getThursdayOfWeek(new Date(2026, 5, 12));// Offset damit KW24 (weeks=0) bei Index 3 (Hahn Felix) startet
+const ROTATION_OFFSET = 3;
 // ── Zuteilung (kranke Schüler überspringen) ──────────────────
 function getAssigned(students, thursday) {
   const sick = loadSick(thursday);
   const n = students.length;
   const weeks = weeksBetween(REF_THURSDAY, thursday);
-  const saugStart = ((weeks * 2) % n + n) % n;
+  const saugStart = ((weeks * 2 + ROTATION_OFFSET) % n + n) % n;
   const werkzeugStart = ((saugStart - 2) % n + n) % n;
 
   const result = [];
