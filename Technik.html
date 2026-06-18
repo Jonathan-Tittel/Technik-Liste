@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Technik Dienstplan</title>
+  <link rel="stylesheet" href="Technik.css" />
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Technik Dienstplan</h1>
+      <p class="subtitle">Donnerstag-Rotation</p>
+    </header>
+
+    <nav class="week-nav">
+      <button id="prevWeek" aria-label="Vorherige Woche">&#8592;</button>
+      <div class="week-info">
+        <span id="weekLabel">KW –</span>
+        <span id="weekDate" class="week-date"></span>
+      </div>
+      <button id="nextWeek" aria-label="Nächste Woche">&#8594;</button>
+    </nav>
+
+    <div id="currentBadge" class="current-badge hidden">Aktuelle Woche</div>
+
+    <section class="duties">
+      <div class="duty-card">
+        <div class="duty-icon">&#x1F9F9;</div>
+        <div class="duty-title">Staubsaugen</div>
+        <div class="duty-names" id="staubNames"></div>
+      </div>
+      <div class="duty-card">
+        <div class="duty-icon">&#x1F527;</div>
+        <div class="duty-title">Werkzeugdienst</div>
+        <div class="duty-names" id="werkzeugNames"></div>
+      </div>
+    </section>
+
+    <section class="sick-section">
+      <div class="sick-header">
+        <h2>Krank gemeldet</h2>
+      </div>
+      <div class="sick-input-row">
+        <input id="sickInput" type="text" placeholder="Nr., Nachname oder Vorname…" autocomplete="off" />
+        <button id="sickAdd" class="btn-primary">Hinzufügen</button>
+      </div>
+      <div id="sickList" class="sick-list"></div>
+    </section>
+
+    <section class="late-section">
+      <div class="late-header">
+        <h2>&#x23F0; Zu spät</h2>
+      </div>
+      <div class="late-input-row">
+        <input id="lateInput" type="text" placeholder="Nr., Nachname oder Vorname…" autocomplete="off" />
+        <button id="lateAdd" class="btn-primary">Hinzufügen</button>
+      </div>
+      <div id="lateList" class="late-list"></div>
+    </section>
+
+    <section class="students-section">
+      <div class="students-header">
+        <h2>Schülerliste</h2>
+        <button id="toggleEdit" class="btn-ghost">Bearbeiten</button>
+      </div>
+      <div id="studentDisplay" class="student-grid"></div>
+      <div id="studentEdit" class="student-edit hidden">
+        <textarea id="studentTextarea" placeholder="Ein Name pro Zeile…"></textarea>
+        <div class="edit-actions">
+          <button id="saveStudents" class="btn-primary">Speichern</button>
+          <button id="cancelEdit" class="btn-ghost">Abbrechen</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="Technik.js"></script>
+</body>
+</html>

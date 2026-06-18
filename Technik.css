@@ -1,0 +1,492 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f0f0f0;
+  color: #222;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.container {
+  width: 100%;
+  max-width: 540px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Header */
+header {
+  text-align: center;
+}
+
+header h1 {
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #111;
+}
+
+.subtitle {
+  font-size: 0.8rem;
+  color: #999;
+  margin-top: 0.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Week navigation */
+.week-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+}
+
+.week-nav button {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: #555;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.week-nav button:hover {
+  background: #f0f0f0;
+}
+
+.week-nav--current {
+  border-color: #555;
+  box-shadow: 0 0 0 2px #555;
+}
+
+.week-nav--current #weekLabel {
+  color: #111;
+}
+
+.week-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+#weekLabel {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #222;
+}
+
+.week-date {
+  font-size: 0.75rem;
+  color: #999;
+}
+
+/* Current badge */
+.current-badge {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #fff;
+  background: #555;
+  border-radius: 20px;
+  padding: 0.3rem 0.9rem;
+  align-self: center;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Duty cards */
+.duties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.duty-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.duty-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.duty-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #888;
+}
+
+.duty-names {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  align-items: center;
+}
+
+.name-tag {
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #333;
+  width: 100%;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Students section */
+.students-section {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.students-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.students-header h2 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #444;
+}
+
+.student-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.5rem;
+}
+
+.student-chip {
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+  color: #555;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.student-chip.active {
+  background: #e8e8e8;
+  border-color: #bbb;
+  color: #222;
+  font-weight: 600;
+}
+
+/* Edit area */
+.student-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.student-edit textarea {
+  width: 100%;
+  min-height: 160px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #333;
+  resize: vertical;
+  outline: none;
+  background: #fafafa;
+}
+
+.student-edit textarea:focus {
+  border-color: #aaa;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+}
+
+/* Buttons */
+.btn-primary {
+  background: #444;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 0.45rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-primary:hover {
+  background: #222;
+}
+
+.btn-ghost {
+  background: none;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 7px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-ghost:hover {
+  background: #f5f5f5;
+  border-color: #bbb;
+}
+
+@media (max-width: 360px) {
+  .duties {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Sick section */
+.sick-section {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.sick-header h2 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #444;
+}
+
+.sick-input-row {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.sick-input-row input {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 7px;
+  padding: 0.45rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #333;
+  background: #fafafa;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.sick-input-row input:focus {
+  border-color: #aaa;
+}
+
+.sick-input-row input.input-error {
+  border-color: #bbb;
+  background: #f5f5f5;
+  animation: shake 0.3s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.sick-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-height: 1.5rem;
+}
+
+.sick-empty {
+  font-size: 0.78rem;
+  color: #bbb;
+  font-style: italic;
+}
+
+.sick-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  padding: 0.25rem 0.5rem 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.sick-tag button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #999;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.sick-tag button:hover {
+  color: #444;
+}
+
+.student-chip.sick {
+  text-decoration: line-through;
+  color: #bbb;
+  border-color: #e8e8e8;
+  background: #fafafa;
+}
+
+.student-chip.late {
+  background: #f5f0e8;
+  border-color: #e0d5c0;
+  color: #7a5c2e;
+  font-style: italic;
+}
+
+/* Late section */
+.late-section {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.late-header h2 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #444;
+}
+
+.late-input-row {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.late-input-row input {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 7px;
+  padding: 0.45rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #333;
+  background: #fafafa;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.late-input-row input:focus {
+  border-color: #aaa;
+}
+
+.late-input-row input.input-error {
+  border-color: #bbb;
+  background: #f5f5f5;
+  animation: shake 0.3s ease;
+}
+
+.late-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-height: 1.5rem;
+}
+
+.late-empty {
+  font-size: 0.78rem;
+  color: #bbb;
+  font-style: italic;
+}
+
+.late-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #f5f0e8;
+  border: 1px solid #e0d5c0;
+  border-radius: 20px;
+  padding: 0.25rem 0.5rem 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  color: #7a5c2e;
+}
+
+.late-tag button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #b89060;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.late-tag button:hover {
+  color: #5a3c0e;
+}
+
+/* Duty name tag variants */
+.name-tag--late {
+  background: #f5f0e8;
+  border-color: #e0d5c0;
+  color: #7a5c2e;
+  font-style: italic;
+}
+
+.name-tag--excused {
+  text-decoration: line-through;
+  color: #bbb;
+  border-color: #e8e8e8;
+  background: #fafafa;
+}
