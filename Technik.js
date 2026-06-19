@@ -3,6 +3,42 @@ const SUPABASE_URL = 'https://kloaehjodwfotdutfunm.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtsb2FlaGpvZHdmb3RkdXRmdW5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MjA4NjIsImV4cCI6MjA5NzM5Njg2Mn0.Wc3lLEYlZoQ0mgGy3x8nsldZBb9Hc1VNbLCXzv3XeVE';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ── PIN-Schutz ────────────────────────────────────────────
+const PIN_HASH = 'f3d497366e7adc53c17ab25367108b8e826b168f3edb00ade987b814eb2d2598'; // SHA-256 of "0702"
+
+async function hashPin(pin) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function unlockApp() {
+  sessionStorage.setItem('technik_unlocked', '1');
+  document.getElementById('pinScreen').classList.add('hidden');
+  document.getElementById('mainContainer').classList.remove('hidden');
+}
+
+const pinInput = document.getElementById('pinInput');
+const pinError = document.getElementById('pinError');
+
+if (sessionStorage.getItem('technik_unlocked') === '1') {
+  unlockApp();
+} else {
+  pinInput.addEventListener('input', async () => {
+    if (pinInput.value.length >= 4) {
+      if ((await hashPin(pinInput.value)) === PIN_HASH) {
+        pinError.classList.add('hidden');
+        unlockApp();
+      } else {
+        pinError.classList.remove('hidden');
+        pinInput.value = '';
+        setTimeout(() => pinError.classList.add('hidden'), 2000);
+      }
+    }
+  });
+  pinInput.focus();
+}
+
+
 // ── Klassen-Verwaltung ────────────────────────────────────────
 const DEFAULT_CLASS = '10B';
 

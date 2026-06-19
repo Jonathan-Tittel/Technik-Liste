@@ -9,7 +9,18 @@
 </head>
 <body>
 
-  <div class="container">
+  <!-- PIN Screen -->
+  <div id="pinScreen" class="pin-screen">
+    <div class="pin-box">
+      <div class="pin-icon">&#x1F512;</div>
+      <h2>Technik Dienstplan</h2>
+      <p>PIN eingeben</p>
+      <input id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off" />
+      <div id="pinError" class="pin-error hidden">Falscher PIN</div>
+    </div>
+  </div>
+
+  <div class="container hidden" id="mainContainer">
     <header>
       <button id="classBtn" class="class-btn" aria-label="Klasse wechseln">&#x1F3EB;</button>
       <h1>Technik Dienstplan</h1>
