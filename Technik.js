@@ -1,69 +1,45 @@
+// ── Supabase ──────────────────────────────────────────────────
+const SUPABASE_URL = 'https://kloaehjodwfotdutfunm.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtsb2FlaGpvZHdmb3RkdXRmdW5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MjA4NjIsImV4cCI6MjA5NzM5Njg2Mn0.Wc3lLEYlZoQ0mgGy3x8nsldZBb9Hc1VNbLCXzv3XeVE';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 // ── Klassen-Verwaltung ────────────────────────────────────────
-const DEFAULT_CLASS = "10B";
-
-function loadClasses() {
-  const saved = localStorage.getItem("technik_classes");
-  return saved ? JSON.parse(saved) : [DEFAULT_CLASS];
-}
-
-function saveClasses(list) {
-  localStorage.setItem("technik_classes", JSON.stringify(list));
-}
+const DEFAULT_CLASS = '10B';
 
 function loadActiveClass() {
-  return localStorage.getItem("technik_active_class") || DEFAULT_CLASS;
+  return localStorage.getItem('technik_active_class') || DEFAULT_CLASS;
 }
 
 function saveActiveClass(name) {
-  localStorage.setItem("technik_active_class", name);
+  localStorage.setItem('technik_active_class', name);
 }
 
-function classKey(base, className) {
-  return `${base}__${className}`;
+async function loadClasses() {
+  const { data } = await db.from('classes').select('name').order('name');
+  if (!data || data.length === 0) {
+    await db.from('classes').upsert({ name: DEFAULT_CLASS });
+    return [DEFAULT_CLASS];
+  }
+  return data.map(r => r.name);
 }
 
 // ── Schüler ──────────────────────────────────────────────────
-const DEFAULT_STUDENTS = [
-  "Alexakis Leonidas",
-  "Brommer Lionel",
-  "Hahn Felix",
-  "Hügle Bennet",
-  "Klein Yves",
-  "Priore Matteo",
-  "Schill Max",
-  "Schwehr Joshua",
-  "Seifert Theo",
-  "Tittel Jonathan",
-  "Faller Matteo"
-];
-
-function loadStudents() {
-  const key = classKey("technik_students", loadActiveClass());
-  const saved = localStorage.getItem(key);
-  // Nur die Standard-Klasse bekommt die Default-Schülerliste
-  if (saved) return JSON.parse(saved);
-  if (loadActiveClass() === DEFAULT_CLASS) return DEFAULT_STUDENTS;
-  return [];
+async function loadStudents() {
+  const cls = loadActiveClass();
+  const { data } = await db.from('students').select('names').eq('class_name', cls).maybeSingle();
+  return data ? data.names : [];
 }
 
-function saveStudents(list) {
-  localStorage.setItem(classKey("technik_students", loadActiveClass()), JSON.stringify(list));
+async function saveStudents(list) {
+  await db.from('students').upsert({ class_name: loadActiveClass(), names: list });
 }
 
 // ── Datums-Helfer ─────────────────────────────────────────────
-// Donnerstag der aktuellen ISO-Woche (Mo–So)
 function getThursdayOfWeek(date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
-  const day = d.getDay() === 0 ? 7 : d.getDay(); // 1=Mo … 7=So
+  const day = d.getDay() === 0 ? 7 : d.getDay();
   d.setDate(d.getDate() + (4 - day));
-  return d;
-}
-
-// Freitag derselben Woche (nur für Anzeige)
-function getFridayOfThursday(thursday) {
-  const d = new Date(thursday);
-  d.setDate(d.getDate() + 1);
   return d;
 }
 
@@ -79,7 +55,7 @@ function weeksBetween(d1, d2) {
 }
 
 function formatDate(date) {
-  return date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function seededRandom(seed) {
@@ -87,84 +63,67 @@ function seededRandom(seed) {
   return x - Math.floor(x);
 }
 
-// ── Krank-Verwaltung ─────────────────────────────────────────
-function sickKey(thursday) {
-  return classKey(`sick_${thursday.getFullYear()}_KW${isoWeek(thursday)}`, loadActiveClass());
+// ── Wochen-Daten (Supabase) ───────────────────────────────────
+function weekId(thursday) {
+  return `${loadActiveClass()}_${thursday.getFullYear()}_KW${isoWeek(thursday)}`;
 }
 
-function loadSick(thursday) {
-  const saved = localStorage.getItem(sickKey(thursday));
-  return saved ? JSON.parse(saved) : [];
+async function loadWeekData(thursday) {
+  const { data } = await db.from('week_data').select('sick,late,disabled').eq('id', weekId(thursday)).maybeSingle();
+  if (!data) return { sick: [], late: [], disabled: [] };
+  return { sick: data.sick || [], late: data.late || [], disabled: data.disabled || [] };
 }
 
-function saveSick(thursday, list) {
-  localStorage.setItem(sickKey(thursday), JSON.stringify(list));
+async function saveWeekData(thursday, wd) {
+  await db.from('week_data').upsert({
+    id: weekId(thursday),
+    class_name: loadActiveClass(),
+    year: thursday.getFullYear(),
+    kw: isoWeek(thursday),
+    sick: wd.sick,
+    late: wd.late,
+    disabled: wd.disabled
+  });
 }
 
-// ── Zu-spät-Verwaltung ───────────────────────────────────────
-function lateKey(thursday) {
-  return classKey(`late_${thursday.getFullYear()}_KW${isoWeek(thursday)}`, loadActiveClass());
-}
-
-function loadLate(thursday) {
-  const saved = localStorage.getItem(lateKey(thursday));
-  return saved ? JSON.parse(saved) : [];
-}
-
-function saveLate(thursday, list) {
-  localStorage.setItem(lateKey(thursday), JSON.stringify(list));
-}
-
-// Schüler per Nummer (1-basiert), Nachname oder Vorname finden
+// ── Schüler per Nummer/Name finden ────────────────────────────
 function resolveStudent(query, students) {
   const q = query.trim().toLowerCase();
   if (!q) return null;
   const num = parseInt(q, 10);
-  if (!isNaN(num) && num >= 1 && num <= students.length) {
-    return students[num - 1];
-  }
+  if (!isNaN(num) && num >= 1 && num <= students.length) return students[num - 1];
   return students.find(name => {
-    const parts = name.toLowerCase().split(" ");
+    const parts = name.toLowerCase().split(' ');
     return parts[0] === q || (parts[1] && parts[1] === q) || name.toLowerCase() === q;
   }) || null;
 }
 
-// ── Referenz-Donnerstag (KW 25 / 19.06.2026) ─────────────────
+// ── Referenz & Rotation ───────────────────────────────────────
 const REF_THURSDAY = getThursdayOfWeek(new Date(2026, 5, 18));
-// Offset: KW25 (weeks=0) startet bei Index 2 (Hahn Felix)
 const ROTATION_OFFSET = 4;
-// ── Zuteilung (kranke Schüler überspringen) ──────────────────
-function getAssigned(students, thursday) {
-  const sick = loadSick(thursday);
+
+function getAssigned(students, thursday, sick) {
   const n = students.length;
   const weeks = weeksBetween(REF_THURSDAY, thursday);
   const saugStart = ((weeks * 2 + ROTATION_OFFSET) % n + n) % n;
   const werkzeugStart = ((saugStart - 2) % n + n) % n;
-
   const result = [];
-
-  // Saugdienst: aktuelles Paar
   for (let i = 0; i < n && result.length < 2; i++) {
-    const student = students[(saugStart + i) % n];
-    if (!sick.includes(student)) result.push(student);
+    const s = students[(saugStart + i) % n];
+    if (!sick.includes(s)) result.push(s);
   }
-  // Fallback Saug
   for (let i = 0; i < n && result.length < 2; i++) {
-    const student = students[(saugStart + i) % n];
-    if (!result.includes(student)) result.push(student);
+    const s = students[(saugStart + i) % n];
+    if (!result.includes(s)) result.push(s);
   }
-
-  // Werkzeugdienst: Paar der Vorwoche (haben letzte Woche gesaugt)
   for (let i = 0; i < n && result.length < 4; i++) {
-    const student = students[(werkzeugStart + i) % n];
-    if (!sick.includes(student) && !result.includes(student)) result.push(student);
+    const s = students[(werkzeugStart + i) % n];
+    if (!sick.includes(s) && !result.includes(s)) result.push(s);
   }
-  // Fallback Werkzeug
   for (let i = 0; i < n && result.length < 4; i++) {
-    const student = students[(werkzeugStart + i) % n];
-    if (!result.includes(student)) result.push(student);
+    const s = students[(werkzeugStart + i) % n];
+    if (!result.includes(s)) result.push(s);
   }
-
   return result;
 }
 
@@ -172,36 +131,52 @@ function getAssigned(students, thursday) {
 let currentThursday = getThursdayOfWeek(new Date());
 
 // ── Rendern ───────────────────────────────────────────────────
-function render() {
-  const students = loadStudents();
-  const todayThursday = getThursdayOfWeek(new Date());
+async function render() {
+  const [students, wd] = await Promise.all([
+    loadStudents(),
+    loadWeekData(currentThursday)
+  ]);
+  const { sick, late, disabled } = wd;
 
+  const todayThursday = getThursdayOfWeek(new Date());
   const isCurrentWeek = currentThursday.getTime() === todayThursday.getTime();
 
-  document.getElementById("weekLabel").textContent = `KW ${isoWeek(currentThursday)}`;
+  document.getElementById('weekLabel').textContent = `KW ${isoWeek(currentThursday)}`;
   const displayDate = isCurrentWeek ? new Date() : currentThursday;
-  document.getElementById("weekDate").textContent = formatDate(displayDate);
+  document.getElementById('weekDate').textContent = formatDate(displayDate);
 
-  const badge = document.getElementById("currentBadge");
-  isCurrentWeek ? badge.classList.remove("hidden") : badge.classList.add("hidden");
+  const badge = document.getElementById('currentBadge');
+  isCurrentWeek ? badge.classList.remove('hidden') : badge.classList.add('hidden');
+  const nav = document.querySelector('.week-nav');
+  isCurrentWeek ? nav.classList.add('week-nav--current') : nav.classList.remove('week-nav--current');
 
-  const nav = document.querySelector(".week-nav");
-  isCurrentWeek ? nav.classList.add("week-nav--current") : nav.classList.remove("week-nav--current");
+  const assigned = getAssigned(students, currentThursday, sick);
 
-  const sick = loadSick(currentThursday);
-  const late = loadLate(currentThursday);
-  const assigned = getAssigned(students, currentThursday);
+  ['staub', 'werkzeug'].forEach(duty => {
+    const card = document.getElementById(`${duty}Card`);
+    const btn = document.getElementById(`${duty}ToggleBtn`);
+    if (disabled.includes(duty)) {
+      card.classList.add('duty-card--disabled');
+      btn.innerHTML = '&#x25B6;';
+      btn.title = 'Aktivieren';
+    } else {
+      card.classList.remove('duty-card--disabled');
+      btn.innerHTML = '&#x23F8;';
+      btn.title = 'Deaktivieren';
+    }
+  });
 
-  // Staubsaugen: zu-spät-Schüler übernehmen den Dienst; originale entfallen
+  // Staubsaugen
   const lateDoing = late.filter(s => !sick.includes(s));
   const origStaub = [assigned[0], assigned[1]].filter(s => !late.includes(s));
   let staubStudents;
-  if (lateDoing.length === 0) {
+  if (disabled.includes('staub')) {
+    staubStudents = [{ name: 'Kein Dienst', isLate: false }];
+  } else if (lateDoing.length === 0) {
     staubStudents = origStaub.map(s => ({ name: s, isLate: false }));
   } else if (lateDoing.length === 1) {
     const seed = currentThursday.getFullYear() * 100 + isoWeek(currentThursday);
-    const rnd = seededRandom(seed);
-    const randomPick = origStaub[Math.floor(rnd * origStaub.length)];
+    const randomPick = origStaub[Math.floor(seededRandom(seed) * origStaub.length)];
     staubStudents = [
       { name: lateDoing[0], isLate: true },
       ...(randomPick ? [{ name: randomPick, isLate: false }] : [])
@@ -209,69 +184,75 @@ function render() {
   } else {
     staubStudents = lateDoing.slice(0, 2).map(s => ({ name: s, isLate: true }));
   }
-  const staubContainer = document.getElementById("staubNames");
-  staubContainer.innerHTML = "";
-  (staubStudents.length > 0 ? staubStudents : [{ name: "–", isLate: false }]).forEach(({ name, isLate }) => {
-    const tag = document.createElement("span");
-    tag.className = "name-tag" + (isLate ? " name-tag--late" : "");
+  const staubContainer = document.getElementById('staubNames');
+  staubContainer.innerHTML = '';
+  (staubStudents.length > 0 ? staubStudents : [{ name: '–', isLate: false }]).forEach(({ name, isLate }) => {
+    const tag = document.createElement('span');
+    tag.className = 'name-tag' + (isLate ? ' name-tag--late' : '');
     tag.textContent = name;
     staubContainer.appendChild(tag);
   });
 
-  // Werkzeugdienst: planmäßige Schüler; zu-spät-Schüler sind entschuldigt (durchgestrichen)
-  const werkzeugContainer = document.getElementById("werkzeugNames");
-  werkzeugContainer.innerHTML = "";
-  [{ name: assigned[2], excused: late.includes(assigned[2]) },
-   { name: assigned[3], excused: late.includes(assigned[3]) }].forEach(({ name, excused }) => {
-    const tag = document.createElement("span");
-    tag.className = "name-tag" + (excused ? " name-tag--excused" : "");
-    tag.textContent = name;
+  // Werkzeugdienst
+  const werkzeugContainer = document.getElementById('werkzeugNames');
+  werkzeugContainer.innerHTML = '';
+  if (disabled.includes('werkzeug')) {
+    const tag = document.createElement('span');
+    tag.className = 'name-tag';
+    tag.textContent = 'Kein Dienst';
     werkzeugContainer.appendChild(tag);
-  });
+  } else {
+    [{ name: assigned[2], excused: late.includes(assigned[2]) },
+     { name: assigned[3], excused: late.includes(assigned[3]) }].forEach(({ name, excused }) => {
+      const tag = document.createElement('span');
+      tag.className = 'name-tag' + (excused ? ' name-tag--excused' : '');
+      tag.textContent = name;
+      werkzeugContainer.appendChild(tag);
+    });
+  }
 
-  const grid = document.getElementById("studentDisplay");
-  grid.innerHTML = "";
+  // Schüler-Grid
+  const grid = document.getElementById('studentDisplay');
+  grid.innerHTML = '';
   students.forEach((name, i) => {
-    const chip = document.createElement("div");
-    const isSick = sick.includes(name);
-    const isLate = late.includes(name);
-    chip.className = "student-chip" +
-      (assigned.includes(name) ? " active" : "") +
-      (isSick ? " sick" : "") +
-      (isLate ? " late" : "");
+    const chip = document.createElement('div');
+    chip.className = 'student-chip' +
+      (assigned.includes(name) ? ' active' : '') +
+      (sick.includes(name) ? ' sick' : '') +
+      (late.includes(name) ? ' late' : '');
     chip.textContent = `${i + 1}. ${name}`;
     grid.appendChild(chip);
   });
 
-  // Kranken-Liste rendern
-  const sickList = document.getElementById("sickList");
-  sickList.innerHTML = "";
+  // Krank-Liste
+  const sickList = document.getElementById('sickList');
+  sickList.innerHTML = '';
   if (sick.length === 0) {
-    const empty = document.createElement("span");
-    empty.className = "sick-empty";
-    empty.textContent = "Niemand krank gemeldet";
-    sickList.appendChild(empty);
+    const e = document.createElement('span');
+    e.className = 'sick-empty';
+    e.textContent = 'Niemand krank gemeldet';
+    sickList.appendChild(e);
   } else {
     sick.forEach(name => {
-      const tag = document.createElement("div");
-      tag.className = "sick-tag";
+      const tag = document.createElement('div');
+      tag.className = 'sick-tag';
       tag.innerHTML = `<span>${name}</span><button aria-label="Entfernen" data-name="${name}">&times;</button>`;
       sickList.appendChild(tag);
     });
   }
 
-  // Zu-spät-Liste rendern
-  const lateList = document.getElementById("lateList");
-  lateList.innerHTML = "";
+  // Zu-spät-Liste
+  const lateList = document.getElementById('lateList');
+  lateList.innerHTML = '';
   if (late.length === 0) {
-    const empty = document.createElement("span");
-    empty.className = "late-empty";
-    empty.textContent = "Niemand zu spät";
-    lateList.appendChild(empty);
+    const e = document.createElement('span');
+    e.className = 'late-empty';
+    e.textContent = 'Niemand zu spät';
+    lateList.appendChild(e);
   } else {
     late.forEach(name => {
-      const tag = document.createElement("div");
-      tag.className = "late-tag";
+      const tag = document.createElement('div');
+      tag.className = 'late-tag';
       tag.innerHTML = `<span>${name}</span><button aria-label="Entfernen" data-name="${name}">&times;</button>`;
       lateList.appendChild(tag);
     });
@@ -279,13 +260,13 @@ function render() {
 }
 
 // ── Navigation ────────────────────────────────────────────────
-document.getElementById("prevWeek").addEventListener("click", () => {
+document.getElementById('prevWeek').addEventListener('click', () => {
   currentThursday = new Date(currentThursday);
   currentThursday.setDate(currentThursday.getDate() - 7);
   render();
 });
 
-document.getElementById("nextWeek").addEventListener("click", () => {
+document.getElementById('nextWeek').addEventListener('click', () => {
   currentThursday = new Date(currentThursday);
   currentThursday.setDate(currentThursday.getDate() + 7);
   render();
@@ -294,14 +275,15 @@ document.getElementById("nextWeek").addEventListener("click", () => {
 // ── Schülerliste bearbeiten ───────────────────────────────────
 let editOpen = false;
 
-document.getElementById("toggleEdit").addEventListener("click", () => {
+document.getElementById('toggleEdit').addEventListener('click', async () => {
   editOpen = !editOpen;
-  const btn = document.getElementById("toggleEdit");
+  const btn = document.getElementById('toggleEdit');
   if (editOpen) {
-    document.getElementById("studentDisplay").classList.add("hidden");
-    document.getElementById("studentEdit").classList.remove("hidden");
-    document.getElementById("studentTextarea").value = loadStudents().join("\n");
-    btn.textContent = "Schließen";
+    document.getElementById('studentDisplay').classList.add('hidden');
+    document.getElementById('studentEdit').classList.remove('hidden');
+    const students = await loadStudents();
+    document.getElementById('studentTextarea').value = students.join('\n');
+    btn.textContent = 'Schließen';
   } else {
     closeEdit();
   }
@@ -309,105 +291,145 @@ document.getElementById("toggleEdit").addEventListener("click", () => {
 
 function closeEdit() {
   editOpen = false;
-  document.getElementById("studentDisplay").classList.remove("hidden");
-  document.getElementById("studentEdit").classList.add("hidden");
-  document.getElementById("toggleEdit").textContent = "Bearbeiten";
+  document.getElementById('studentDisplay').classList.remove('hidden');
+  document.getElementById('studentEdit').classList.add('hidden');
+  document.getElementById('toggleEdit').textContent = 'Bearbeiten';
 }
 
-document.getElementById("saveStudents").addEventListener("click", () => {
-  const names = document.getElementById("studentTextarea").value
-    .split("\n")
-    .map(n => n.trim())
-    .filter(n => n.length > 0);
-  if (names.length < 4) {
-    alert("Mindestens 4 Schüler werden benötigt.");
-    return;
-  }
-  saveStudents(names);
+document.getElementById('saveStudents').addEventListener('click', async () => {
+  const names = document.getElementById('studentTextarea').value
+    .split('\n').map(n => n.trim()).filter(n => n.length > 0);
+  if (names.length < 4) { alert('Mindestens 4 Schüler werden benötigt.'); return; }
+  await saveStudents(names);
   closeEdit();
   render();
 });
 
-document.getElementById("cancelEdit").addEventListener("click", closeEdit);
+document.getElementById('cancelEdit').addEventListener('click', closeEdit);
 
-// ── Krank hinzufügen ──────────────────────────────────────────
-function addSick() {
-  const input = document.getElementById("sickInput");
+// ── Krank ─────────────────────────────────────────────────────
+async function addSick() {
+  const input = document.getElementById('sickInput');
   const query = input.value.trim();
   if (!query) return;
-  const students = loadStudents();
+  const students = await loadStudents();
   const found = resolveStudent(query, students);
   if (!found) {
-    input.classList.add("input-error");
-    setTimeout(() => input.classList.remove("input-error"), 1200);
+    input.classList.add('input-error');
+    setTimeout(() => input.classList.remove('input-error'), 1200);
     return;
   }
-  const sick = loadSick(currentThursday);
-  if (!sick.includes(found)) {
-    sick.push(found);
-    saveSick(currentThursday, sick);
-  }
-  input.value = "";
+  const wd = await loadWeekData(currentThursday);
+  if (!wd.sick.includes(found)) wd.sick.push(found);
+  await saveWeekData(currentThursday, wd);
+  input.value = '';
   render();
 }
 
-document.getElementById("sickAdd").addEventListener("click", addSick);
-document.getElementById("sickInput").addEventListener("keydown", e => {
-  if (e.key === "Enter") addSick();
-});
+document.getElementById('sickAdd').addEventListener('click', addSick);
+document.getElementById('sickInput').addEventListener('keydown', e => { if (e.key === 'Enter') addSick(); });
 
-document.getElementById("sickList").addEventListener("click", e => {
-  const btn = e.target.closest("button[data-name]");
+document.getElementById('sickList').addEventListener('click', async e => {
+  const btn = e.target.closest('button[data-name]');
   if (!btn) return;
-  const name = btn.dataset.name;
-  const sick = loadSick(currentThursday).filter(n => n !== name);
-  saveSick(currentThursday, sick);
+  const wd = await loadWeekData(currentThursday);
+  wd.sick = wd.sick.filter(n => n !== btn.dataset.name);
+  await saveWeekData(currentThursday, wd);
   render();
 });
 
-// ── Zu spät hinzufügen ────────────────────────────────────────
-function addLate() {
-  const input = document.getElementById("lateInput");
+// ── Zu spät ───────────────────────────────────────────────────
+async function addLate() {
+  const input = document.getElementById('lateInput');
   const query = input.value.trim();
   if (!query) return;
-  const students = loadStudents();
+  const students = await loadStudents();
   const found = resolveStudent(query, students);
   if (!found) {
-    input.classList.add("input-error");
-    setTimeout(() => input.classList.remove("input-error"), 1200);
+    input.classList.add('input-error');
+    setTimeout(() => input.classList.remove('input-error'), 1200);
     return;
   }
-  const late = loadLate(currentThursday);
-  if (!late.includes(found)) {
-    late.push(found);
-    saveLate(currentThursday, late);
-  }
-  input.value = "";
+  const wd = await loadWeekData(currentThursday);
+  if (!wd.late.includes(found)) wd.late.push(found);
+  await saveWeekData(currentThursday, wd);
+  input.value = '';
   render();
 }
 
-document.getElementById("lateAdd").addEventListener("click", addLate);
-document.getElementById("lateInput").addEventListener("keydown", e => {
-  if (e.key === "Enter") addLate();
-});
+document.getElementById('lateAdd').addEventListener('click', addLate);
+document.getElementById('lateInput').addEventListener('keydown', e => { if (e.key === 'Enter') addLate(); });
 
-document.getElementById("lateList").addEventListener("click", e => {
-  const btn = e.target.closest("button[data-name]");
+document.getElementById('lateList').addEventListener('click', async e => {
+  const btn = e.target.closest('button[data-name]');
   if (!btn) return;
-  const name = btn.dataset.name;
-  const late = loadLate(currentThursday).filter(n => n !== name);
-  saveLate(currentThursday, late);
+  const wd = await loadWeekData(currentThursday);
+  wd.late = wd.late.filter(n => n !== btn.dataset.name);
+  await saveWeekData(currentThursday, wd);
   render();
 });
 
-// ── Start ─────────────────────────────────────────────────────
+// ── Dienst deaktivieren ───────────────────────────────────────
+async function toggleDisabled(thursday, duty) {
+  const wd = await loadWeekData(thursday);
+  const idx = wd.disabled.indexOf(duty);
+  if (idx === -1) wd.disabled.push(duty); else wd.disabled.splice(idx, 1);
+  await saveWeekData(thursday, wd);
+  render();
+}
 
-function deleteClass(name) {
-  let classes = loadClasses().filter(c => c !== name);
-  if (classes.length === 0) classes = [DEFAULT_CLASS];
-  saveClasses(classes);
-  if (loadActiveClass() === name) {
-    saveActiveClass(classes[0]);
+document.getElementById('staubToggleBtn').addEventListener('click', () => toggleDisabled(currentThursday, 'staub'));
+document.getElementById('werkzeugToggleBtn').addEventListener('click', () => toggleDisabled(currentThursday, 'werkzeug'));
+
+// ── Klassen-Modal ─────────────────────────────────────────────
+async function renderClassModal() {
+  const classes = await loadClasses();
+  const active = loadActiveClass();
+  const list = document.getElementById('classList');
+  list.innerHTML = '';
+  classes.forEach(name => {
+    const row = document.createElement('div');
+    row.className = 'class-row' + (name === active ? ' class-row--active' : '');
+    row.innerHTML = `
+      <span class="class-row-name">${name}</span>
+      <div class="class-row-actions">
+        ${name === active ? '<span class="class-active-badge">Aktiv</span>' : ''}
+        <button class="class-action-btn" data-action="rename" data-name="${name}" title="Umbenennen">&#x270F;&#xFE0F;</button>
+        <button class="class-action-btn class-action-btn--delete" data-action="delete" data-name="${name}" title="Loeschen">&times;</button>
+      </div>`;
+    row.querySelector('.class-row-name').addEventListener('click', () => {
+      saveActiveClass(name);
+      currentThursday = getThursdayOfWeek(new Date());
+      closeClassModal();
+      updateClassSubtitle();
+      render();
+    });
+    row.querySelector("[data-action='rename']").addEventListener('click', async e => {
+      e.stopPropagation();
+      await renameClass(name);
+    });
+    row.querySelector("[data-action='delete']").addEventListener('click', async e => {
+      e.stopPropagation();
+      if (confirm(`Klasse "${name}" wirklich loeschen?`)) await deleteClass(name);
+    });
+    list.appendChild(row);
+  });
+}
+
+async function deleteClass(name) {
+  await Promise.all([
+    db.from('classes').delete().eq('name', name),
+    db.from('students').delete().eq('class_name', name),
+    db.from('week_data').delete().eq('class_name', name)
+  ]);
+  const classes = await loadClasses();
+  if (!classes.includes(loadActiveClass())) {
+    if (classes.length === 0) {
+      await db.from('classes').upsert({ name: DEFAULT_CLASS });
+      saveActiveClass(DEFAULT_CLASS);
+    } else {
+      saveActiveClass(classes[0]);
+    }
     currentThursday = getThursdayOfWeek(new Date());
     updateClassSubtitle();
     render();
@@ -415,22 +437,33 @@ function deleteClass(name) {
   renderClassModal();
 }
 
-function renameClass(oldName) {
-  const newName = prompt(`Klasse umbenennen:`, oldName);
+async function renameClass(oldName) {
+  const newName = prompt('Klasse umbenennen:', oldName);
   if (!newName || !newName.trim() || newName.trim() === oldName) return;
   const trimmed = newName.trim();
-  let classes = loadClasses();
+  const classes = await loadClasses();
   if (classes.includes(trimmed)) return;
-  classes = classes.map(c => c === oldName ? trimmed : c);
-  saveClasses(classes);
-  // Daten umkopieren
-  ["technik_students"].forEach(base => {
-    const val = localStorage.getItem(classKey(base, oldName));
-    if (val !== null) {
-      localStorage.setItem(classKey(base, trimmed), val);
-      localStorage.removeItem(classKey(base, oldName));
-    }
-  });
+
+  await db.from('classes').insert({ name: trimmed });
+  await db.from('classes').delete().eq('name', oldName);
+
+  const { data: stuData } = await db.from('students').select('names').eq('class_name', oldName).single();
+  if (stuData) {
+    await db.from('students').upsert({ class_name: trimmed, names: stuData.names });
+    await db.from('students').delete().eq('class_name', oldName);
+  }
+
+  const { data: wdRows } = await db.from('week_data').select('*').eq('class_name', oldName);
+  if (wdRows && wdRows.length > 0) {
+    const newRows = wdRows.map(r => ({
+      ...r,
+      id: r.id.replace(oldName + '_', trimmed + '_'),
+      class_name: trimmed
+    }));
+    await db.from('week_data').upsert(newRows);
+    await db.from('week_data').delete().eq('class_name', oldName);
+  }
+
   if (loadActiveClass() === oldName) {
     saveActiveClass(trimmed);
     updateClassSubtitle();
@@ -439,72 +472,31 @@ function renameClass(oldName) {
   render();
 }
 
-// ── Klassen-Modal ─────────────────────────────────────────────
-function renderClassModal() {
-  const classes = loadClasses();
-  const active = loadActiveClass();
-  const list = document.getElementById("classList");
-  list.innerHTML = "";
-  classes.forEach(name => {
-    const row = document.createElement("div");
-    row.className = "class-row" + (name === active ? " class-row--active" : "");
-    row.innerHTML = `
-      <span class="class-row-name">${name}</span>
-      <div class="class-row-actions">
-        ${name === active ? "<span class=\"class-active-badge\">Aktiv</span>" : ""}
-        <button class="class-action-btn" data-action="rename" data-name="${name}" title="Umbenennen">&#x270F;&#xFE0F;</button>
-        <button class="class-action-btn class-action-btn--delete" data-action="delete" data-name="${name}" title="L\u00f6schen">&times;</button>
-      </div>`;
-    row.querySelector(".class-row-name").addEventListener("click", () => {
-      saveActiveClass(name);
-      currentThursday = getThursdayOfWeek(new Date());
-      closeClassModal();
-      updateClassSubtitle();
-      render();
-    });
-    row.querySelector("[data-action='rename']").addEventListener("click", e => {
-      e.stopPropagation();
-      renameClass(name);
-    });
-    row.querySelector("[data-action='delete']").addEventListener("click", e => {
-      e.stopPropagation();
-      if (confirm(`Klasse "${name}" wirklich löschen?`)) deleteClass(name);
-    });
-    list.appendChild(row);
-  });
-}
-
-
-function openClassModal() {
-  renderClassModal();
-  document.getElementById("classModal").classList.remove("hidden");
+async function openClassModal() {
+  await renderClassModal();
+  document.getElementById('classModal').classList.remove('hidden');
 }
 
 function closeClassModal() {
-  document.getElementById("classModal").classList.add("hidden");
-  document.getElementById("classNameInput").value = "";
+  document.getElementById('classModal').classList.add('hidden');
+  document.getElementById('classNameInput').value = '';
 }
 
 function updateClassSubtitle() {
-  document.getElementById("classSubtitle").textContent = loadActiveClass();
+  document.getElementById('classSubtitle').textContent = loadActiveClass();
 }
 
-document.getElementById("classBtn").addEventListener("click", openClassModal);
-document.getElementById("classModalClose").addEventListener("click", closeClassModal);
-document.getElementById("classModal").addEventListener("click", e => {
-  if (e.target === document.getElementById("classModal")) closeClassModal();
+document.getElementById('classBtn').addEventListener('click', openClassModal);
+document.getElementById('classModalClose').addEventListener('click', closeClassModal);
+document.getElementById('classModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('classModal')) closeClassModal();
 });
 
-document.getElementById("classAddBtn").addEventListener("click", () => {
-  const name = document.getElementById("classNameInput").value.trim();
+document.getElementById('classAddBtn').addEventListener('click', async () => {
+  const name = document.getElementById('classNameInput').value.trim();
   if (!name) return;
-  const classes = loadClasses();
-  if (!classes.includes(name)) {
-    classes.push(name);
-    saveClasses(classes);
-    // Neue Klasse mit leerer Schülerliste initialisieren
-    localStorage.setItem(classKey("technik_students", name), JSON.stringify([]));
-  }
+  await db.from('classes').upsert({ name });
+  await db.from('students').upsert({ class_name: name, names: [] });
   saveActiveClass(name);
   currentThursday = getThursdayOfWeek(new Date());
   closeClassModal();
@@ -512,9 +504,10 @@ document.getElementById("classAddBtn").addEventListener("click", () => {
   render();
 });
 
-document.getElementById("classNameInput").addEventListener("keydown", e => {
-  if (e.key === "Enter") document.getElementById("classAddBtn").click();
+document.getElementById('classNameInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('classAddBtn').click();
 });
 
+// ── Start ─────────────────────────────────────────────────────
 updateClassSubtitle();
 render();
