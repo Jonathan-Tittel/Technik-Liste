@@ -203,8 +203,14 @@ async function render() {
     } else {
       saugStart = formulaSaugStart(n, currentThursday);
     }
-    // Gespeichert für diese Woche (fire & forget)
-    saveWeekData(currentThursday, { ...currWd, saug_start: saugStart });
+    // Nur saug_start speichern – sick/late/disabled nicht überschreiben
+    db.from('week_data').upsert({
+      id: weekId(currentThursday),
+      class_name: loadActiveClass(),
+      year: currentThursday.getFullYear(),
+      kw: isoWeek(currentThursday),
+      saug_start: saugStart
+    });
   }
 
   // ─ Saug-Paar diese Woche ──────────────────────────────────
