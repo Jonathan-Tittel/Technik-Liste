@@ -175,35 +175,40 @@ let currentThursday = getThursdayOfWeek(new Date());
 
 // ── Rendern ───────────────────────────────────────────────────
 async function render() {
+  const prevPrevThursday = new Date(currentThursday);
+  prevPrevThursday.setDate(prevPrevThursday.getDate() - 14);
   const prevThursday = new Date(currentThursday);
   prevThursday.setDate(prevThursday.getDate() - 7);
 
-  const [students, currWd, prevWd] = await Promise.all([
+  const [students, prevPrevWd, prevWd, currWd] = await Promise.all([
     loadStudents(),
-    loadWeekData(currentThursday),
-    loadWeekData(prevThursday)
+    loadWeekData(prevPrevThursday),
+    loadWeekData(prevThursday),
+    loadWeekData(currentThursday)
   ]);
 
   const n = students.length;
   const { sick, late, disabled } = currWd;
 
-  // ─ Saug-Startindex für diese Woche bestimmen ───────────────────
+  // ─ Start-Indizes der letzten zwei Wochen ──────────────────────
+  const prevPrevStart = prevPrevWd.saug_start != null
+    ? prevPrevWd.saug_start : formulaSaugStart(n, prevPrevThursday);
+  const prevStart = prevWd.saug_start != null
+    ? prevWd.saug_start : formulaSaugStart(n, prevThursday);
+
+  // ─ Tatsächliches Saug-Paar der Vorwoche (mit Werkzeug-Ausschluss) ─
+  // Werkzeug der Vorwoche startete vom ersten Schüler des Saug-Paars der Vorvorwoche
+  const prevWerkBase = findSaugPair(students, prevPrevStart, prevWd.sick || []);
+  const prevActualSaug = findSaugPair(
+    students, prevStart, [...(prevWd.sick || []), ...prevWerkBase]
+  );
+
+  // ─ Saug-Startindex diese Woche ────────────────────────────────
   let saugStart = currWd.saug_start;
-  if (saugStart === null || saugStart === undefined) {
-    // Vorwoche: gespeicherten oder Formel-Start verwenden
-    const prevStart = (prevWd.saug_start !== null && prevWd.saug_start !== undefined)
-      ? prevWd.saug_start
-      : formulaSaugStart(n, prevThursday);
-    // Tatsächliches Saug-Paar der Vorwoche ermitteln
-    const prevPair = findSaugPair(students, prevStart, prevWd.sick || []);
-    // Nächste Woche startet nach dem letzten eingesetzten Schüler
-    if (prevPair.length > 0) {
-      const lastIdx = students.indexOf(prevPair[prevPair.length - 1]);
-      saugStart = lastIdx >= 0 ? (lastIdx + 1) % n : formulaSaugStart(n, currentThursday);
-    } else {
-      saugStart = formulaSaugStart(n, currentThursday);
-    }
-    // Nur saug_start speichern – sick/late/disabled nicht überschreiben
+  if (saugStart == null) {
+    const lastIdx = prevActualSaug.length > 0
+      ? students.indexOf(prevActualSaug[prevActualSaug.length - 1]) : -1;
+    saugStart = lastIdx >= 0 ? (lastIdx + 1) % n : formulaSaugStart(n, currentThursday);
     db.from('week_data').upsert({
       id: weekId(currentThursday),
       class_name: loadActiveClass(),
@@ -213,14 +218,16 @@ async function render() {
     });
   }
 
-  // ─ Saug-Paar diese Woche ──────────────────────────────────
-  const saugPair = findSaugPair(students, saugStart, sick);
+  // ─ Werkzeug startet vom ersten Schüler des vorwöchigen Saug-Paars ─
+  const werkzeugStart = prevActualSaug.length > 0
+    ? students.indexOf(prevActualSaug[0]) : prevStart;
 
-  // ─ Werkzeug = Saug-Paar der Vorwoche ────────────────────────
-  const prevStart = (prevWd.saug_start !== null && prevWd.saug_start !== undefined)
-    ? prevWd.saug_start
-    : formulaSaugStart(n, prevThursday);
-  const werkzeugPair = findSaugPair(students, prevStart, prevWd.sick || []);
+  // Schritt 1: Werkzeug-Rohpaar (nur krank ausschließen)
+  const werkzeugBase = findSaugPair(students, werkzeugStart, sick);
+  // Schritt 2: Saug (krank + Werkzeug ausschließen → kein Doppeldienst)
+  const saugPair = findSaugPair(students, saugStart, [...sick, ...werkzeugBase]);
+  // Schritt 3: Werkzeug final (krank + Saug ausschließen)
+  const werkzeugPair = findSaugPair(students, werkzeugStart, [...sick, ...saugPair]);
 
   // assigned[0,1] = Saug, assigned[2,3] = Werkzeug
   const assigned = [...saugPair, ...werkzeugPair];
@@ -250,22 +257,25 @@ async function render() {
   });
 
   // Staubsaugen
-  const lateDoing = late.filter(s => !sick.includes(s));
-  const origStaub = [assigned[0], assigned[1]].filter(s => !late.includes(s));
   let staubStudents;
   if (disabled.includes('staub')) {
     staubStudents = [{ name: 'Kein Dienst', isLate: false }];
-  } else if (lateDoing.length === 0) {
-    staubStudents = origStaub.map(s => ({ name: s, isLate: false }));
-  } else if (lateDoing.length === 1) {
-    const seed = currentThursday.getFullYear() * 100 + isoWeek(currentThursday);
-    const randomPick = origStaub[Math.floor(seededRandom(seed) * origStaub.length)];
-    staubStudents = [
-      { name: lateDoing[0], isLate: true },
-      ...(randomPick ? [{ name: randomPick, isLate: false }] : [])
-    ];
   } else {
-    staubStudents = lateDoing.slice(0, 2).map(s => ({ name: s, isLate: true }));
+    // Zu-spät-Kommende, die nicht krank und nicht schon im Saug-Paar sind
+    const extraLate = late.filter(s => !sick.includes(s) && !saugPair.includes(s));
+    const activeSaug = [...saugPair];
+    for (const latePerson of extraLate) {
+      // Aus dem Original-Paar den mit dem höchsten Listen-Index entfernen
+      const originals = activeSaug.filter(s => saugPair.includes(s));
+      if (originals.length > 0) {
+        const toRemove = originals.reduce((max, s) =>
+          students.indexOf(s) > students.indexOf(max) ? s : max
+        );
+        activeSaug.splice(activeSaug.indexOf(toRemove), 1);
+      }
+      activeSaug.push(latePerson);
+    }
+    staubStudents = activeSaug.map(s => ({ name: s, isLate: late.includes(s) }));
   }
   const staubContainer = document.getElementById('staubNames');
   staubContainer.innerHTML = '';
