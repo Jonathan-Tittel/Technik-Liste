@@ -105,13 +105,18 @@ function weekId(thursday) {
 }
 
 async function loadWeekData(thursday) {
-  const { data } = await db.from('week_data').select('sick,late,disabled').eq('id', weekId(thursday)).maybeSingle();
-  if (!data) return { sick: [], late: [], disabled: [] };
-  return { sick: data.sick || [], late: data.late || [], disabled: data.disabled || [] };
+  const { data } = await db.from('week_data').select('sick,late,disabled,saug_start').eq('id', weekId(thursday)).maybeSingle();
+  if (!data) return { sick: [], late: [], disabled: [], saug_start: null };
+  return {
+    sick: data.sick || [],
+    late: data.late || [],
+    disabled: data.disabled || [],
+    saug_start: data.saug_start ?? null
+  };
 }
 
 async function saveWeekData(thursday, wd) {
-  await db.from('week_data').upsert({
+  const payload = {
     id: weekId(thursday),
     class_name: loadActiveClass(),
     year: thursday.getFullYear(),
@@ -119,7 +124,11 @@ async function saveWeekData(thursday, wd) {
     sick: wd.sick,
     late: wd.late,
     disabled: wd.disabled
-  });
+  };
+  if (wd.saug_start !== undefined && wd.saug_start !== null) {
+    payload.saug_start = wd.saug_start;
+  }
+  await db.from('week_data').upsert(payload);
 }
 
 // ── Schüler per Nummer/Name finden ────────────────────────────
@@ -138,29 +147,27 @@ function resolveStudent(query, students) {
 const REF_THURSDAY = getThursdayOfWeek(new Date(2026, 5, 18));
 const ROTATION_OFFSET = 4;
 
-function getAssigned(students, thursday, sick) {
+// Findet die tatsächlich zugeteilten Saug-Schüler ab einem Startindex
+function findSaugPair(students, start, sick) {
   const n = students.length;
-  const weeks = weeksBetween(REF_THURSDAY, thursday);
-  const saugStart = ((weeks * 2 + ROTATION_OFFSET) % n + n) % n;
-  const werkzeugStart = ((saugStart - 2) % n + n) % n;
+  if (n === 0) return [];
   const result = [];
   for (let i = 0; i < n && result.length < 2; i++) {
-    const s = students[(saugStart + i) % n];
+    const s = students[(start + i) % n];
     if (!sick.includes(s)) result.push(s);
   }
+  // Fallback: alle krank – trotzdem jemanden zeigen
   for (let i = 0; i < n && result.length < 2; i++) {
-    const s = students[(saugStart + i) % n];
-    if (!result.includes(s)) result.push(s);
-  }
-  for (let i = 0; i < n && result.length < 4; i++) {
-    const s = students[(werkzeugStart + i) % n];
-    if (!sick.includes(s) && !result.includes(s)) result.push(s);
-  }
-  for (let i = 0; i < n && result.length < 4; i++) {
-    const s = students[(werkzeugStart + i) % n];
+    const s = students[(start + i) % n];
     if (!result.includes(s)) result.push(s);
   }
   return result;
+}
+
+// Formel-Startindex für eine Woche (wird nur als Fallback genutzt)
+function formulaSaugStart(n, thursday) {
+  const weeks = weeksBetween(REF_THURSDAY, thursday);
+  return ((weeks * 2 + ROTATION_OFFSET) % n + n) % n;
 }
 
 // ── State ─────────────────────────────────────────────────────
@@ -168,25 +175,59 @@ let currentThursday = getThursdayOfWeek(new Date());
 
 // ── Rendern ───────────────────────────────────────────────────
 async function render() {
-  const [students, wd] = await Promise.all([
+  const prevThursday = new Date(currentThursday);
+  prevThursday.setDate(prevThursday.getDate() - 7);
+
+  const [students, currWd, prevWd] = await Promise.all([
     loadStudents(),
-    loadWeekData(currentThursday)
+    loadWeekData(currentThursday),
+    loadWeekData(prevThursday)
   ]);
-  const { sick, late, disabled } = wd;
+
+  const n = students.length;
+  const { sick, late, disabled } = currWd;
+
+  // ─ Saug-Startindex für diese Woche bestimmen ───────────────────
+  let saugStart = currWd.saug_start;
+  if (saugStart === null || saugStart === undefined) {
+    // Vorwoche: gespeicherten oder Formel-Start verwenden
+    const prevStart = (prevWd.saug_start !== null && prevWd.saug_start !== undefined)
+      ? prevWd.saug_start
+      : formulaSaugStart(n, prevThursday);
+    // Tatsächliches Saug-Paar der Vorwoche ermitteln
+    const prevPair = findSaugPair(students, prevStart, prevWd.sick || []);
+    // Nächste Woche startet nach dem letzten eingesetzten Schüler
+    if (prevPair.length > 0) {
+      const lastIdx = students.indexOf(prevPair[prevPair.length - 1]);
+      saugStart = lastIdx >= 0 ? (lastIdx + 1) % n : formulaSaugStart(n, currentThursday);
+    } else {
+      saugStart = formulaSaugStart(n, currentThursday);
+    }
+    // Gespeichert für diese Woche (fire & forget)
+    saveWeekData(currentThursday, { ...currWd, saug_start: saugStart });
+  }
+
+  // ─ Saug-Paar diese Woche ──────────────────────────────────
+  const saugPair = findSaugPair(students, saugStart, sick);
+
+  // ─ Werkzeug = Saug-Paar der Vorwoche ────────────────────────
+  const prevStart = (prevWd.saug_start !== null && prevWd.saug_start !== undefined)
+    ? prevWd.saug_start
+    : formulaSaugStart(n, prevThursday);
+  const werkzeugPair = findSaugPair(students, prevStart, prevWd.sick || []);
+
+  // assigned[0,1] = Saug, assigned[2,3] = Werkzeug
+  const assigned = [...saugPair, ...werkzeugPair];
 
   const todayThursday = getThursdayOfWeek(new Date());
   const isCurrentWeek = currentThursday.getTime() === todayThursday.getTime();
-
   document.getElementById('weekLabel').textContent = `KW ${isoWeek(currentThursday)}`;
   const displayDate = isCurrentWeek ? new Date() : currentThursday;
   document.getElementById('weekDate').textContent = formatDate(displayDate);
-
   const badge = document.getElementById('currentBadge');
   isCurrentWeek ? badge.classList.remove('hidden') : badge.classList.add('hidden');
   const nav = document.querySelector('.week-nav');
   isCurrentWeek ? nav.classList.add('week-nav--current') : nav.classList.remove('week-nav--current');
-
-  const assigned = getAssigned(students, currentThursday, sick);
 
   ['staub', 'werkzeug'].forEach(duty => {
     const card = document.getElementById(`${duty}Card`);
